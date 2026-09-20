@@ -7,6 +7,8 @@ import { currentAllowedUser } from "@/lib/auth";
 import { supabaseData } from "@/lib/supabase/data";
 import type { ArtifactKind, ArtifactFile } from "@/lib/renderer";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/validation";
+import type { ArtifactFilesUpload } from "@/lib/artifact-transfer";
+import { readArtifactFiles } from "@/lib/artifact-transfer.server";
 
 const MAX_BUNDLE_BYTES = 6 * 1024 * 1024;
 const MAX_DESCRIPTION_CHARS = 1000;
@@ -89,7 +91,7 @@ function bustShares(tokens: Array<string | null>) {
 export async function createArtifact(input: {
   title: string;
   kind: ArtifactKind;
-  files: ArtifactFile[];
+  files: ArtifactFilesUpload;
   entry: string | null;
   description?: string | null;
   inDirectory?: boolean;
@@ -108,11 +110,14 @@ export async function createArtifact(input: {
   const descErr = descriptionInvalid(description);
   if (descErr) return { error: descErr };
 
-  if (!input.files.length) {
+  const decoded = await readArtifactFiles(input.files);
+  if ("error" in decoded) return decoded;
+  const files = decoded.files;
+  if (!files.length) {
     return { error: "Add at least one file" };
   }
 
-  const sizeError = bundleTooBig(input.files);
+  const sizeError = bundleTooBig(files);
   if (sizeError) return { error: sizeError };
 
   const inDirectory = input.inDirectory ?? false;
@@ -123,7 +128,7 @@ export async function createArtifact(input: {
       owner_email: user.email,
       title,
       kind: input.kind,
-      files: input.files,
+      files,
       entry: input.entry,
       description,
       in_directory: inDirectory,
@@ -143,7 +148,7 @@ export async function updateArtifact(
   id: string,
   patch: {
     title?: string;
-    files?: ArtifactFile[];
+    files?: ArtifactFilesUpload;
     entry?: string | null;
     kind?: ArtifactKind;
     description?: string | null;
@@ -154,12 +159,15 @@ export async function updateArtifact(
   if (!user) return { error: "Not signed in" };
   const supabase = supabaseData();
 
-  if (patch.files) {
-    const sizeError = bundleTooBig(patch.files);
+  const normalized = { ...patch } as Record<string, unknown>;
+  if (patch.files !== undefined) {
+    const decoded = await readArtifactFiles(patch.files);
+    if ("error" in decoded) return decoded;
+    const sizeError = bundleTooBig(decoded.files);
     if (sizeError) return { error: sizeError };
+    normalized.files = decoded.files;
   }
 
-  const normalized = { ...patch } as Record<string, unknown>;
   if (Object.prototype.hasOwnProperty.call(patch, "title")) {
     const trimmed = patch.title?.trim() ?? "";
     const titleErr = titleInvalid(trimmed, false);

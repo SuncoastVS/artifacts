@@ -1,0 +1,3 @@
+# Local upload samples and Supabase CLI state are not application source.
+html.html
+supabase/.temp/

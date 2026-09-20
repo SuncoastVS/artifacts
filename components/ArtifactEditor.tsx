@@ -24,7 +24,7 @@ import {
   type ArtifactFile,
   type ArtifactKind,
 } from "@/lib/renderer";
-import { createArtifact, updateArtifact } from "@/lib/artifacts";
+import { saveArtifact } from "@/lib/save-artifact";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/validation";
 
 type NewInitial = {
@@ -318,35 +318,17 @@ export function ArtifactEditor(props: Props) {
     setErrorMsg(null);
     if (titleMissing || descriptionInvalid) return;
     startTransition(async () => {
-      if (props.mode === "new") {
-        const res = await createArtifact({
-          title,
-          description,
-          kind,
-          files,
-          entry,
-          inDirectory,
-        });
-        if ("error" in res && res.error) {
-          setErrorMsg(res.error);
-          return;
-        }
-        if ("id" in res && res.id) {
-          router.push(`/a/${res.id}`);
-        }
+      const res = await saveArtifact(
+        { title, description, kind, files, entry, inDirectory },
+        props.mode === "edit" ? props.initial.id : undefined,
+      );
+      if ("error" in res && res.error) {
+        setErrorMsg(res.error);
+        return;
+      }
+      if ("id" in res && res.id) {
+        router.push(`/a/${res.id}`);
       } else {
-        const res = await updateArtifact(props.initial.id, {
-          title,
-          description,
-          files,
-          entry,
-          kind,
-          inDirectory,
-        });
-        if ("error" in res && res.error) {
-          setErrorMsg(res.error);
-          return;
-        }
         router.refresh();
       }
     });

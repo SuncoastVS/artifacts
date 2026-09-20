@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      // Artifacts can include base64-encoded images. The lib/artifacts.ts
-      // bundle cap is 6 MB of file content; this allows JSON-wire overhead.
+      // Local parsing ceiling; hosting platforms can reject smaller requests
+      // first. Large artifact uploads are compressed before invoking an action.
       bodySizeLimit: "8mb",
     },
   },

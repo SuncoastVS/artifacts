@@ -11,11 +11,19 @@ login/signup pages of its own.
 
 - Hub SSO auth — one shared session across all `*.tools.suncoast.studio` tools
 - Drag-and-drop file upload (or paste code) — multiple files per artifact
+- Automatic lossless compression for large saves; original files stay editable
 - Live preview, sandboxed iframe rendering
 - JSX/TSX support via Babel standalone + React 18 (in the iframe)
 - Per-artifact public share link, toggleable
 - Artifacts are private by default (owner checks in the service-role data layer)
 - Share pages cached for 1h, invalidated immediately on edit/unshare
+
+Artifacts allow up to 6 MiB of decoded file content. Saves above 1 MiB of JSON
+are gzip-compressed in the browser and decoded on the server. Compressed uploads
+are capped at 3 MiB to leave headroom for the hosting platform's request limit;
+already-compressed images may need resizing even within the content limit.
+Upload failures appear in the editor without discarding your work. Increasing
+Next.js's `serverActions.bodySizeLimit` does not override a platform-level limit.
 
 ## Local setup
 

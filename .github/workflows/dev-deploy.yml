@@ -40,12 +40,20 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Vercel CLI
         run: npm install -g vercel@59.11.2
+      - name: Enable package managers
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.2 --activate
+      - name: Pull Preview settings for dev
+        run: vercel pull --yes --environment=preview --git-branch=dev --scope suncoast-venture-studio --token="$VERCEL_TOKEN"
+      - name: Build Preview
+        run: vercel build --token="$VERCEL_TOKEN"
       - name: Deploy dev branch to Preview
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          url="$(vercel deploy --yes --target=preview --scope suncoast-venture-studio --token="$VERCEL_TOKEN")"
+          url="$(vercel deploy --prebuilt --yes --target=preview --scope suncoast-venture-studio --token="$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Dev deployment: $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Assign the shared dev hostname

@@ -1,0 +1,51 @@
+# The shared dev branch deploys only to Vercel Preview for human review.
+# Production continues through the existing main-branch workflow after review.
+name: Deploy shared dev environment
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: artifacts
+            project_id: prj_eDUKfIJz35v7ll9WpdSCwsWsOmNZ
+            domain: dev.artifacts.tools.suncoast.studio
+    concurrency:
+      group: shared-dev-${{ matrix.project }}
+      cancel-in-progress: true
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ matrix.project_id }}
+      DEV_DOMAIN: ${{ matrix.domain }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Vercel CLI
+        run: npm install -g vercel@59.11.2
+      - name: Deploy dev branch to Preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --yes --target=preview --scope suncoast-venture-studio --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Dev deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Assign the shared dev hostname
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          vercel alias set "$DEPLOYMENT_URL" "$DEV_DOMAIN" --scope suncoast-venture-studio --token="$VERCEL_TOKEN"
+          echo "Review: https://$DEV_DOMAIN" >> "$GITHUB_STEP_SUMMARY"

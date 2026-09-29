@@ -26,6 +26,13 @@ import {
 } from "@/lib/renderer";
 import { saveArtifact } from "@/lib/save-artifact";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/validation";
+import {
+  ACCEPTED_FILE_TYPES,
+  describeResized,
+  detectType,
+  readArtifactFile,
+  type ResizedImage,
+} from "@/lib/file-ingest";
 
 type NewInitial = {
   title?: string;
@@ -34,6 +41,7 @@ type NewInitial = {
   files?: ArtifactFile[];
   entry?: string | null;
   inDirectory?: boolean;
+  notice?: string | null;
 };
 
 type EditInitial = {
@@ -49,24 +57,6 @@ type EditInitial = {
 type Props =
   | { mode: "new"; initial?: NewInitial }
   | { mode: "edit"; initial: EditInitial };
-
-const ACCEPTED =
-  ".html,.htm,.css,.js,.mjs,.jsx,.ts,.tsx,.json,.png,.jpg,.jpeg,.gif,.webp,.avif,.svg,.ico,.bmp";
-const BINARY_RE = /\.(png|jpe?g|gif|webp|avif|ico|bmp)$/i;
-
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + CHUNK) as unknown as number[],
-    );
-  }
-  return btoa(binary);
-}
 
 const STARTER_HTML: ArtifactFile = {
   name: "index.html",
@@ -160,24 +150,6 @@ const STARTER_JSX: ArtifactFile = {
 }`,
 };
 
-function detectType(name: string): string {
-  if (/\.html?$/i.test(name)) return "text/html";
-  if (/\.css$/i.test(name)) return "text/css";
-  if (/\.m?js$/i.test(name)) return "text/javascript";
-  if (/\.tsx?$/i.test(name)) return "text/typescript";
-  if (/\.jsx$/i.test(name)) return "text/jsx";
-  if (/\.json$/i.test(name)) return "application/json";
-  if (/\.svg$/i.test(name)) return "image/svg+xml";
-  if (/\.png$/i.test(name)) return "image/png";
-  if (/\.jpe?g$/i.test(name)) return "image/jpeg";
-  if (/\.gif$/i.test(name)) return "image/gif";
-  if (/\.webp$/i.test(name)) return "image/webp";
-  if (/\.avif$/i.test(name)) return "image/avif";
-  if (/\.ico$/i.test(name)) return "image/x-icon";
-  if (/\.bmp$/i.test(name)) return "image/bmp";
-  return "text/plain";
-}
-
 export function ArtifactEditor(props: Props) {
   const { mode } = props;
   const initial = props.initial;
@@ -196,6 +168,9 @@ export function ArtifactEditor(props: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [pending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    props.mode === "new" ? (props.initial?.notice ?? null) : null,
+  );
 
   const kind: ArtifactKind = useMemo(
     () => (initial?.kind ?? inferKind(files)),
@@ -228,25 +203,13 @@ export function ArtifactEditor(props: Props) {
   const handleFiles = useCallback(
     async (list: FileList | File[]) => {
       const items = Array.from(list);
+      const resized: ResizedImage[] = [];
       for (const f of items) {
-        if (BINARY_RE.test(f.name)) {
-          const content = await fileToBase64(f);
-          addOrReplaceFile({
-            name: f.name,
-            type: f.type || detectType(f.name),
-            content,
-            encoding: "base64",
-          });
-        } else {
-          const content = await f.text();
-          addOrReplaceFile({
-            name: f.name,
-            type: f.type || detectType(f.name),
-            content,
-            encoding: "utf8",
-          });
-        }
+        const read = await readArtifactFile(f, f.name);
+        addOrReplaceFile(read.file);
+        if (read.resized) resized.push(read.resized);
       }
+      setNotice(describeResized(resized));
     },
     [addOrReplaceFile],
   );
@@ -439,7 +402,7 @@ export function ArtifactEditor(props: Props) {
               <input
                 type="file"
                 multiple
-                accept={ACCEPTED}
+                accept={ACCEPTED_FILE_TYPES}
                 hidden
                 onChange={(e) => {
                   if (e.target.files) handleFiles(e.target.files);
@@ -471,6 +434,19 @@ export function ArtifactEditor(props: Props) {
             </Button>
           </div>
         </div>
+        {notice && (
+          <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-amber/40 bg-sand/20 px-3 py-1.5 text-xs text-amber-deep">
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="text-amber-deep/70 transition-colors hover:text-amber-deep"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="border-b border-sea/12 bg-shell-deep/40 md:hidden">

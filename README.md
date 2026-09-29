@@ -10,8 +10,11 @@ login/signup pages of its own.
 ## Features
 
 - Hub SSO auth — one shared session across all `*.tools.suncoast.studio` tools
-- Drag-and-drop file upload (or paste code) — multiple files per artifact
+- Drag-and-drop file upload (or paste code) — multiple files per artifact,
+  including images and web fonts (WOFF2, WOFF, TTF, OTF)
 - Automatic lossless compression for large saves; original files stay editable
+- Photos larger than 2048px are resized in the browser on import, keeping their
+  path and format, and the editor lists what was resized
 - Live preview, sandboxed iframe rendering
 - JSX/TSX support via Babel standalone + React 18 (in the iframe)
 - Per-artifact public share link, toggleable
@@ -20,8 +23,10 @@ login/signup pages of its own.
 
 Artifacts allow up to 6 MiB of decoded file content. Saves above 1 MiB of JSON
 are gzip-compressed in the browser and decoded on the server. Compressed uploads
-are capped at 3 MiB to leave headroom for the hosting platform's request limit;
-already-compressed images may need resizing even within the content limit.
+are capped at 3 MiB to leave headroom for the hosting platform's request limit.
+Already-compressed images barely shrink under gzip, so image-heavy artifacts can
+hit that cap well below 6 MiB; import-time photo resizing keeps typical builds
+under it.
 Upload failures appear in the editor without discarding your work. Increasing
 Next.js's `serverActions.bodySizeLimit` does not override a platform-level limit.
 

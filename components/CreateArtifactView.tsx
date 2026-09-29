@@ -47,6 +47,7 @@ export function CreateArtifactView() {
           files: imported.files,
           entry: imported.entry,
           inDirectory: false,
+          notice: imported.notice,
         }}
       />
     );
@@ -110,8 +111,9 @@ export function CreateArtifactView() {
               automatically.
             </p>
             <p className="mx-auto mt-2 max-w-md text-xs text-ink-mute">
-              HTML, CSS, JS, JSX, TS, TSX, and images (PNG, JPG, GIF, WEBP,
-              SVG, AVIF, ICO, BMP) are imported. Up to 80 files, 6 MB total.
+              HTML, CSS, JS, JSX, TS, TSX, images (PNG, JPG, GIF, WEBP, SVG,
+              AVIF, ICO, BMP), and fonts (WOFF2, WOFF, TTF, OTF) are imported.
+              Photos larger than 2048px are resized. Up to 80 files, 6 MB total.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

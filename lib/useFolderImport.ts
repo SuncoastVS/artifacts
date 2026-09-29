@@ -8,32 +8,17 @@ import {
   type ArtifactFile,
   type ArtifactKind,
 } from "@/lib/renderer";
+import {
+  SUPPORTED_FILE_RE,
+  describeResized,
+  readArtifactFile,
+  type ResizedImage,
+} from "@/lib/file-ingest";
 
-const SUPPORTED =
-  /\.(html?|css|m?js|jsx|tsx|ts|json|png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i;
-const BINARY = /\.(png|jpe?g|gif|webp|avif|ico|bmp)$/i;
 const MAX_FILES = 80;
 
 const baseName = (path: string) => path.split("/").pop() ?? path;
 const isRoot = (path: string) => !path.includes("/");
-
-function detectType(name: string): string {
-  if (/\.html?$/i.test(name)) return "text/html";
-  if (/\.css$/i.test(name)) return "text/css";
-  if (/\.m?js$/i.test(name)) return "text/javascript";
-  if (/\.tsx?$/i.test(name)) return "text/typescript";
-  if (/\.jsx$/i.test(name)) return "text/jsx";
-  if (/\.json$/i.test(name)) return "application/json";
-  if (/\.svg$/i.test(name)) return "image/svg+xml";
-  if (/\.png$/i.test(name)) return "image/png";
-  if (/\.jpe?g$/i.test(name)) return "image/jpeg";
-  if (/\.gif$/i.test(name)) return "image/gif";
-  if (/\.webp$/i.test(name)) return "image/webp";
-  if (/\.avif$/i.test(name)) return "image/avif";
-  if (/\.ico$/i.test(name)) return "image/x-icon";
-  if (/\.bmp$/i.test(name)) return "image/bmp";
-  return "text/plain";
-}
 
 function suggestImportTitle(
   rootName: string | null,
@@ -48,20 +33,6 @@ function suggestImportTitle(
   }
 
   return null;
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + CHUNK) as unknown as number[],
-    );
-  }
-  return btoa(binary);
 }
 
 function readDir(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
@@ -177,6 +148,7 @@ export type Pending = {
   kind: ArtifactKind;
   files: ArtifactFile[];
   candidates: ArtifactFile[];
+  notice: string | null;
 };
 
 export function useFolderImport() {
@@ -197,8 +169,9 @@ export function useFolderImport() {
       kind: ArtifactKind,
       files: ArtifactFile[],
       entry: string | null,
+      notice: string | null,
     ) => {
-      setStaging({ suggestedTitle, kind, files, entry });
+      setStaging({ suggestedTitle, kind, files, entry, notice });
       setPending(null);
       setBusy(false);
       router.push("/new");
@@ -238,11 +211,11 @@ export function useFolderImport() {
       setBusy(true);
       try {
         const { files, rootName } = await collectDropped(e.dataTransfer);
-        const supported = files.filter(({ path }) => SUPPORTED.test(path));
-        const skipped = files.filter(({ path }) => !SUPPORTED.test(path));
+        const supported = files.filter(({ path }) => SUPPORTED_FILE_RE.test(path));
+        const skipped = files.filter(({ path }) => !SUPPORTED_FILE_RE.test(path));
         if (!supported.length) {
           setError(
-            "No supported files found. Try HTML, CSS, JS, JSX, TS, TSX, or images.",
+            "No supported files found. Try HTML, CSS, JS, JSX, TS, TSX, images, or fonts.",
           );
           return;
         }
@@ -260,29 +233,17 @@ export function useFolderImport() {
         }
 
         const artifactFiles: ArtifactFile[] = [];
+        const resized: ResizedImage[] = [];
         for (const { path, file } of supported) {
-          if (BINARY.test(path)) {
-            const content = await fileToBase64(file);
-            artifactFiles.push({
-              name: path,
-              type: detectType(path),
-              content,
-              encoding: "base64",
-            });
-          } else {
-            const content = await file.text();
-            artifactFiles.push({
-              name: path,
-              type: detectType(path),
-              content,
-              encoding: "utf8",
-            });
-          }
+          const read = await readArtifactFile(file, path);
+          artifactFiles.push(read.file);
+          if (read.resized) resized.push(read.resized);
         }
 
         const suggestedTitle = suggestImportTitle(rootName, artifactFiles);
         const kind = inferKind(artifactFiles);
         const decision = pickEntry(artifactFiles, kind);
+        const notice = describeResized(resized);
 
         if (decision.ambiguous) {
           setPending({
@@ -290,12 +251,13 @@ export function useFolderImport() {
             kind,
             files: artifactFiles,
             candidates: decision.candidates,
+            notice,
           });
           setBusy(false);
           return;
         }
 
-        stageAndGo(suggestedTitle, kind, artifactFiles, decision.entry);
+        stageAndGo(suggestedTitle, kind, artifactFiles, decision.entry, notice);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't read those files.");
         setBusy(false);
@@ -312,6 +274,7 @@ export function useFolderImport() {
         pending.kind,
         pending.files,
         entry,
+        pending.notice,
       );
     },
     [pending, stageAndGo],

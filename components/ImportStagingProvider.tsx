@@ -14,6 +14,7 @@ export type ImportStaging = {
   kind: ArtifactKind;
   files: ArtifactFile[];
   entry: string | null;
+  notice: string | null;
 };
 
 type StagingContext = {
